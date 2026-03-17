@@ -1,6 +1,10 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import MapInterface from './components/MapInterface';
 import './index.css';
 
-function App() {
+// We moved your UI into a HomePage component
+const HomePage = () => {
   return (
     <div style={styles.page}>
       <div style={styles.glowTop}></div>
@@ -52,6 +56,21 @@ function App() {
         </section>
       </main>
     </div>
+  );
+};
+
+// The main App component now handles the routing
+function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* The Dateify landing page */}
+        <Route path="/" element={<HomePage />} />
+        
+        {/* The isolated Map interface */}
+        <Route path="/map" element={<MapInterface />} />
+      </Routes>
+    </Router>
   );
 }
 
