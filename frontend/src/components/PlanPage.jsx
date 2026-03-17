@@ -12,6 +12,8 @@ export default function PlanPage() {
   });
 
   const [generatedPlan, setGeneratedPlan] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -21,48 +23,43 @@ export default function PlanPage() {
     }));
   }
 
-  function handleGeneratePlan() {
-    const suggestionsByVibe = {
-      Romantic: [
-        "Start with coffee at a cozy café",
-        "Take a scenic sunset walk",
-        "Enjoy candle-lit dinner together",
-      ],
-      Chill: [
-        "Grab drinks at a casual bar",
-        "Walk through a quiet park",
-        "End with dessert and conversation",
-      ],
-      Foodie: [
-        "Try a popular local brunch spot",
-        "Visit a street food market",
-        "Finish at a dessert café",
-      ],
-      Adventurous: [
-        "Try an activity-based first stop",
-        "Explore a lively city area together",
-        "End with rooftop food or drinks",
-      ],
-    };
+  async function handleGeneratePlan() {
+    setIsLoading(true);
+    setErrorMessage("");
 
-    const activities =
-      suggestionsByVibe[formData.vibe] || suggestionsByVibe.Romantic;
+    try {
+      const response = await fetch("http://localhost:5000/api/plan-date", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-    setGeneratedPlan({
-      title: `${formData.vibe || "Perfect"} Date Plan`,
-      summary: `A ${
-        formData.duration || "3-hour"
-      } date around ${formData.location || "your chosen area"} with a ${
-        formData.budget || "flexible"
-      } budget. You can edit any AI suggestion below to personalise the experience.`,
-      activities,
-    });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(data.error || "Failed to generate plan.");
+        setIsLoading(false);
+        return;
+      }
+
+      setGeneratedPlan(data);
+    } catch (error) {
+      console.error("Failed to generate plan:", error);
+      setErrorMessage("Something went wrong while generating the plan.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  function handleActivityChange(index, value) {
+  function handleActivityChange(index, field, value) {
     setGeneratedPlan((prev) => {
       const updated = [...prev.activities];
-      updated[index] = value;
+      updated[index] = {
+        ...updated[index],
+        [field]: value,
+      };
       return { ...prev, activities: updated };
     });
   }
@@ -70,7 +67,15 @@ export default function PlanPage() {
   function handleAddActivity() {
     setGeneratedPlan((prev) => ({
       ...prev,
-      activities: [...prev.activities, "New custom activity"],
+      activities: [
+        ...prev.activities,
+        {
+          name: "New custom activity",
+          address: "Custom address",
+          lat: null,
+          lng: null,
+        },
+      ],
     }));
   }
 
@@ -79,6 +84,11 @@ export default function PlanPage() {
       ...prev,
       activities: prev.activities.filter((_, i) => i !== index),
     }));
+  }
+
+  function handleGoToMap() {
+    if (!generatedPlan) return;
+    navigate("/map", { state: { plan: generatedPlan } });
   }
 
   return (
@@ -205,9 +215,17 @@ export default function PlanPage() {
               </select>
             </div>
 
-            <button style={styles.primaryButton} onClick={handleGeneratePlan}>
-              Generate AI Plan
+            <button
+              style={styles.primaryButton}
+              onClick={handleGeneratePlan}
+              disabled={isLoading}
+            >
+              {isLoading ? "Generating..." : "Generate AI Plan"}
             </button>
+
+            {errorMessage && (
+              <div style={styles.errorBox}>{errorMessage}</div>
+            )}
           </div>
 
           {generatedPlan && (
@@ -227,13 +245,18 @@ export default function PlanPage() {
                   <div key={index} style={styles.activityCard}>
                     <div style={styles.activityNumber}>{index + 1}</div>
 
-                    <input
-                      style={styles.activityInput}
-                      value={activity}
-                      onChange={(e) =>
-                        handleActivityChange(index, e.target.value)
-                      }
-                    />
+                    <div style={styles.activityContent}>
+                      <input
+                        style={styles.activityInput}
+                        value={activity.name}
+                        onChange={(e) =>
+                          handleActivityChange(index, "name", e.target.value)
+                        }
+                      />
+                      <div style={styles.activityAddress}>
+                        {activity.address}
+                      </div>
+                    </div>
 
                     <button
                       style={styles.removeButton}
@@ -250,13 +273,17 @@ export default function PlanPage() {
               </button>
 
               <div style={styles.actionRow}>
-                <button style={styles.secondaryButton} onClick={handleGeneratePlan}>
+                <button
+                  style={styles.secondaryButton}
+                  onClick={handleGeneratePlan}
+                  disabled={isLoading}
+                >
                   Regenerate
                 </button>
 
                 <button
                   style={styles.primaryButtonSmall}
-                  onClick={() => navigate("/map")}
+                  onClick={handleGoToMap}
                 >
                   View Route Map
                 </button>
@@ -547,6 +574,10 @@ const styles = {
     fontWeight: 800,
     fontSize: "14px",
   },
+  activityContent: {
+    display: "grid",
+    gap: "4px",
+  },
   activityInput: {
     width: "100%",
     background: "transparent",
@@ -554,6 +585,11 @@ const styles = {
     outline: "none",
     color: "#F5F7FA",
     fontSize: "15px",
+  },
+  activityAddress: {
+    fontSize: "12px",
+    color: "#A7B0BA",
+    lineHeight: 1.4,
   },
   removeButton: {
     padding: "10px 12px",
@@ -605,14 +641,22 @@ const styles = {
     boxShadow: "0 0 30px rgba(30,215,96,0.2)",
   },
   select: {
-  width: "100%",
-  padding: "14px 16px",
-  borderRadius: "18px",
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(0,0,0,0.6)", // darker
-  color: "#F5F7FA",
-  fontSize: "15px",
-  outline: "none",
-  colorScheme: "dark", // 🔥 KEY LINE
-},
+    width: "100%",
+    padding: "14px 16px",
+    borderRadius: "18px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.6)",
+    color: "#F5F7FA",
+    fontSize: "15px",
+    outline: "none",
+    colorScheme: "dark",
+  },
+  errorBox: {
+    padding: "12px 14px",
+    borderRadius: "14px",
+    background: "rgba(255, 79, 79, 0.10)",
+    border: "1px solid rgba(255, 79, 79, 0.22)",
+    color: "#FFB4B4",
+    fontSize: "14px",
+  },
 };
