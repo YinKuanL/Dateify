@@ -12,6 +12,7 @@ export default function PlanPage() {
   });
 
   const [generatedPlan, setGeneratedPlan] = useState(null);
+
   function handleChange(e) {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -21,18 +22,63 @@ export default function PlanPage() {
   }
 
   function handleGeneratePlan() {
-    // Temporary mock result for hackathon demo
+    const suggestionsByVibe = {
+      Romantic: [
+        "Start with coffee at a cozy café",
+        "Take a scenic sunset walk",
+        "Enjoy candle-lit dinner together",
+      ],
+      Chill: [
+        "Grab drinks at a casual bar",
+        "Walk through a quiet park",
+        "End with dessert and conversation",
+      ],
+      Foodie: [
+        "Try a popular local brunch spot",
+        "Visit a street food market",
+        "Finish at a dessert café",
+      ],
+      Adventurous: [
+        "Try an activity-based first stop",
+        "Explore a lively city area together",
+        "End with rooftop food or drinks",
+      ],
+    };
+
+    const activities =
+      suggestionsByVibe[formData.vibe] || suggestionsByVibe.Romantic;
+
     setGeneratedPlan({
       title: `${formData.vibe || "Perfect"} Date Plan`,
-      summary: `A ${formData.duration || "3-hour"} date around ${
-        formData.location || "your chosen area"
-      } with a budget of ${formData.budget || "flexible"} budget.`,
-      activities: [
-        "Start with a cozy café stop",
-        "Take a scenic walk together",
-        "Enjoy dinner at a stylish restaurant",
-      ],
+      summary: `A ${
+        formData.duration || "3-hour"
+      } date around ${formData.location || "your chosen area"} with a ${
+        formData.budget || "flexible"
+      } budget. You can edit any AI suggestion below to personalise the experience.`,
+      activities,
     });
+  }
+
+  function handleActivityChange(index, value) {
+    setGeneratedPlan((prev) => {
+      const updated = [...prev.activities];
+      updated[index] = value;
+      return { ...prev, activities: updated };
+    });
+  }
+
+  function handleAddActivity() {
+    setGeneratedPlan((prev) => ({
+      ...prev,
+      activities: [...prev.activities, "New custom activity"],
+    }));
+  }
+
+  function handleRemoveActivity(index) {
+    setGeneratedPlan((prev) => ({
+      ...prev,
+      activities: prev.activities.filter((_, i) => i !== index),
+    }));
   }
 
   return (
@@ -41,9 +87,15 @@ export default function PlanPage() {
       <div style={styles.glow2}></div>
 
       <nav style={styles.nav}>
-        <div style={styles.logo}>Dateify</div>
+        <div style={styles.logoWrap}>
+          <div style={styles.logoDot}></div>
+          <div style={styles.logo}>Dateify</div>
+        </div>
+
         <div style={styles.navLinks}>
-          <button style={styles.navButton}>Plan</button>
+          <button style={{ ...styles.navButton, ...styles.navButtonActive }}>
+            Plan
+          </button>
           <button style={styles.navButton} onClick={() => navigate("/map")}>
             Map
           </button>
@@ -53,83 +105,162 @@ export default function PlanPage() {
       <main style={styles.main}>
         <section style={styles.left}>
           <div style={styles.badge}>AI Date Planner</div>
-          <h1 style={styles.title}>Plan the perfect date in seconds.</h1>
+
+          <h1 style={styles.title}>
+            Plan the perfect date,
+            <br />
+            then tailor it your way.
+          </h1>
+
           <p style={styles.subtitle}>
-            Enter the vibe, budget, duration, and location. Our AI will build
-            the full experience for you.
+            Our AI suggests the ideal activities based on your vibe, budget,
+            duration, and location. Then you can customise every step before
+            viewing the route.
           </p>
+
+          <div style={styles.featureRow}>
+            <div style={styles.featureCard}>
+              <div style={styles.featureTitle}>AI Suggestions</div>
+              <div style={styles.featureText}>
+                Instant activity ideas matched to your vibe.
+              </div>
+            </div>
+
+            <div style={styles.featureCard}>
+              <div style={styles.featureTitle}>Customisable Plan</div>
+              <div style={styles.featureText}>
+                Edit, remove, or add your own activities easily.
+              </div>
+            </div>
+          </div>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.cardTitle}>Create your plan</h2>
+          <div style={styles.cardHeader}>
+            <div>
+              <h2 style={styles.cardTitle}>Create your plan</h2>
+              <p style={styles.cardSubtitle}>
+                Start with AI, then personalise it.
+              </p>
+            </div>
+          </div>
 
           <div style={styles.form}>
-            <input
-              style={styles.input}
-              type="text"
-              name="location"
-              placeholder="Enter location"
-              value={formData.location}
-              onChange={handleChange}
-            />
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Location</label>
+              <input
+                style={styles.input}
+                type="text"
+                name="location"
+                placeholder="Enter city or area"
+                value={formData.location}
+                onChange={handleChange}
+              />
+            </div>
 
-            <select
-              style={styles.input}
-              name="duration"
-              value={formData.duration}
-              onChange={handleChange}
-            >
-              <option value="">Select duration</option>
-              <option value="2 hours">2 hours</option>
-              <option value="4 hours">4 hours</option>
-              <option value="All evening">All evening</option>
-            </select>
+            <div style={styles.twoCol}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Duration</label>
+                <select
+                  style={styles.input}
+                  name="duration"
+                  value={formData.duration}
+                  onChange={handleChange}
+                >
+                  <option value="">Select duration</option>
+                  <option value="2 hours">2 hours</option>
+                  <option value="4 hours">4 hours</option>
+                  <option value="All evening">All evening</option>
+                </select>
+              </div>
 
-            <select
-              style={styles.input}
-              name="budget"
-              value={formData.budget}
-              onChange={handleChange}
-            >
-              <option value="">Select budget</option>
-              <option value="Budget-friendly">Budget-friendly</option>
-              <option value="Medium">Medium</option>
-              <option value="Luxury">Luxury</option>
-            </select>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Budget</label>
+                <select
+                  style={styles.input}
+                  name="budget"
+                  value={formData.budget}
+                  onChange={handleChange}
+                >
+                  <option value="">Select budget</option>
+                  <option value="Budget-friendly">Budget-friendly</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Luxury">Luxury</option>
+                </select>
+              </div>
+            </div>
 
-            <select
-              style={styles.input}
-              name="vibe"
-              value={formData.vibe}
-              onChange={handleChange}
-            >
-              <option value="Romantic">Romantic</option>
-              <option value="Chill">Chill</option>
-              <option value="Foodie">Foodie</option>
-              <option value="Adventurous">Adventurous</option>
-            </select>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Vibe</label>
+              <select
+                style={styles.input}
+                name="vibe"
+                value={formData.vibe}
+                onChange={handleChange}
+              >
+                <option value="Romantic">Romantic</option>
+                <option value="Chill">Chill</option>
+                <option value="Foodie">Foodie</option>
+                <option value="Adventurous">Adventurous</option>
+              </select>
+            </div>
 
             <button style={styles.primaryButton} onClick={handleGeneratePlan}>
-              Generate Plan
+              Generate AI Plan
             </button>
           </div>
 
           {generatedPlan && (
             <div style={styles.resultCard}>
-              <h3 style={styles.resultTitle}>{generatedPlan.title}</h3>
-              <p style={styles.resultSummary}>{generatedPlan.summary}</p>
+              <div style={styles.resultTop}>
+                <div>
+                  <h3 style={styles.resultTitle}>{generatedPlan.title}</h3>
+                  <p style={styles.resultSummary}>{generatedPlan.summary}</p>
+                </div>
+                <div style={styles.aiPill}>AI Suggested</div>
+              </div>
 
-              <ul style={styles.activityList}>
+              <div style={styles.sectionLabel}>Activities</div>
+
+              <div style={styles.activityList}>
                 {generatedPlan.activities.map((activity, index) => (
-                  <li key={index} style={styles.activityItem}>
-                    {activity}
-                  </li>
-                ))}
-              </ul>
+                  <div key={index} style={styles.activityCard}>
+                    <div style={styles.activityNumber}>{index + 1}</div>
 
-              <button style={styles.secondaryButton} onClick={() => navigate("/map")}>
-                View Route Map
+                    <input
+                      style={styles.activityInput}
+                      value={activity}
+                      onChange={(e) =>
+                        handleActivityChange(index, e.target.value)
+                      }
+                    />
+
+                    <button
+                      style={styles.removeButton}
+                      onClick={() => handleRemoveActivity(index)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button style={styles.addButton} onClick={handleAddActivity}>
+                + Add Custom Activity
               </button>
+
+              <div style={styles.actionRow}>
+                <button style={styles.secondaryButton} onClick={handleGeneratePlan}>
+                  Regenerate
+                </button>
+
+                <button
+                  style={styles.primaryButtonSmall}
+                  onClick={() => navigate("/map")}
+                >
+                  View Route Map
+                </button>
+              </div>
             </div>
           )}
         </section>
@@ -141,7 +272,8 @@ export default function PlanPage() {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#0B0D0F",
+    background:
+      "radial-gradient(circle at top left, rgba(30,215,96,0.08), transparent 28%), radial-gradient(circle at bottom right, rgba(255,79,163,0.08), transparent 28%), #0B0D0F",
     color: "#F5F7FA",
     position: "relative",
     overflow: "hidden",
@@ -157,6 +289,7 @@ const styles = {
     background: "rgba(30,215,96,0.18)",
     filter: "blur(120px)",
     borderRadius: "50%",
+    pointerEvents: "none",
   },
   glow2: {
     position: "absolute",
@@ -167,9 +300,10 @@ const styles = {
     background: "rgba(255,79,163,0.15)",
     filter: "blur(120px)",
     borderRadius: "50%",
+    pointerEvents: "none",
   },
   nav: {
-    maxWidth: "1200px",
+    maxWidth: "1280px",
     margin: "0 auto",
     display: "flex",
     justifyContent: "space-between",
@@ -178,36 +312,59 @@ const styles = {
     position: "relative",
     zIndex: 2,
   },
+  logoWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  logoDot: {
+    width: "12px",
+    height: "12px",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #1ED760, #FF4FA3)",
+    boxShadow: "0 0 18px rgba(30,215,96,0.45)",
+  },
   logo: {
     fontSize: "24px",
     fontWeight: 800,
+    letterSpacing: "-0.03em",
   },
   navLinks: {
     display: "flex",
     gap: "12px",
   },
   navButton: {
-    background: "transparent",
+    background: "rgba(255,255,255,0.04)",
     color: "#A7B0BA",
-    border: "none",
+    border: "1px solid rgba(255,255,255,0.08)",
+    padding: "10px 16px",
+    borderRadius: "999px",
     cursor: "pointer",
-    fontSize: "15px",
+    fontSize: "14px",
+    transition: "0.2s ease",
+  },
+  navButtonActive: {
+    color: "#F5F7FA",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.08)",
   },
   main: {
-    maxWidth: "1200px",
+    maxWidth: "1280px",
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1.05fr 0.95fr",
     gap: "32px",
-    alignItems: "center",
+    alignItems: "start",
     minHeight: "calc(100vh - 100px)",
     position: "relative",
     zIndex: 2,
+    paddingTop: "20px",
   },
   left: {
     display: "flex",
     flexDirection: "column",
-    gap: "20px",
+    gap: "22px",
+    paddingTop: "40px",
   },
   badge: {
     display: "inline-block",
@@ -220,33 +377,83 @@ const styles = {
     fontSize: "14px",
   },
   title: {
-    fontSize: "60px",
-    lineHeight: 1,
+    fontSize: "64px",
+    lineHeight: 0.98,
     fontWeight: 800,
-    letterSpacing: "-0.04em",
+    letterSpacing: "-0.05em",
+    maxWidth: "680px",
   },
   subtitle: {
     fontSize: "18px",
+    lineHeight: 1.7,
+    color: "#A7B0BA",
+    maxWidth: "620px",
+  },
+  featureRow: {
+    display: "flex",
+    gap: "16px",
+    flexWrap: "wrap",
+    marginTop: "8px",
+  },
+  featureCard: {
+    flex: "1 1 220px",
+    minWidth: "220px",
+    padding: "18px",
+    borderRadius: "22px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+  },
+  featureTitle: {
+    fontSize: "16px",
+    fontWeight: 700,
+    marginBottom: "8px",
+  },
+  featureText: {
+    fontSize: "14px",
     lineHeight: 1.6,
     color: "#A7B0BA",
-    maxWidth: "560px",
   },
   card: {
-    borderRadius: "28px",
+    borderRadius: "30px",
     padding: "28px",
     background: "rgba(255,255,255,0.05)",
     border: "1px solid rgba(255,255,255,0.1)",
     backdropFilter: "blur(18px)",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+    WebkitBackdropFilter: "blur(18px)",
+    boxShadow: "0 24px 70px rgba(0,0,0,0.35)",
+  },
+  cardHeader: {
+    marginBottom: "20px",
   },
   cardTitle: {
-    fontSize: "24px",
-    fontWeight: 700,
-    marginBottom: "20px",
+    fontSize: "28px",
+    fontWeight: 800,
+    marginBottom: "6px",
+    letterSpacing: "-0.03em",
+  },
+  cardSubtitle: {
+    color: "#A7B0BA",
+    fontSize: "15px",
+    lineHeight: 1.5,
   },
   form: {
     display: "grid",
     gap: "16px",
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "16px",
+  },
+  inputGroup: {
+    display: "grid",
+    gap: "8px",
+  },
+  label: {
+    fontSize: "13px",
+    color: "#A7B0BA",
+    fontWeight: 600,
   },
   input: {
     width: "100%",
@@ -259,48 +466,142 @@ const styles = {
     outline: "none",
   },
   primaryButton: {
-    padding: "14px 18px",
+    padding: "15px 18px",
     border: "none",
     borderRadius: "18px",
-    background: "#1ED760",
+    background: "linear-gradient(135deg, #1ED760, #39E97C)",
     color: "#08110B",
     fontSize: "16px",
-    fontWeight: 700,
+    fontWeight: 800,
     cursor: "pointer",
     boxShadow: "0 0 30px rgba(30,215,96,0.25)",
     marginTop: "8px",
   },
   resultCard: {
     marginTop: "24px",
-    padding: "20px",
-    borderRadius: "22px",
+    padding: "22px",
+    borderRadius: "24px",
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
+  resultTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "12px",
+    marginBottom: "18px",
+  },
   resultTitle: {
-    fontSize: "20px",
-    fontWeight: 700,
-    marginBottom: "10px",
+    fontSize: "22px",
+    fontWeight: 800,
+    marginBottom: "8px",
+    letterSpacing: "-0.02em",
   },
   resultSummary: {
     color: "#A7B0BA",
-    marginBottom: "14px",
-    lineHeight: 1.6,
+    lineHeight: 1.65,
+    fontSize: "15px",
+    maxWidth: "520px",
+  },
+  aiPill: {
+    padding: "8px 12px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 700,
+    background: "rgba(30,215,96,0.12)",
+    color: "#7EF0A5",
+    border: "1px solid rgba(30,215,96,0.2)",
+    whiteSpace: "nowrap",
+  },
+  sectionLabel: {
+    fontSize: "13px",
+    color: "#A7B0BA",
+    fontWeight: 700,
+    marginBottom: "12px",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
   activityList: {
-    paddingLeft: "18px",
-    marginBottom: "18px",
-    color: "#F5F7FA",
+    display: "grid",
+    gap: "12px",
   },
-  activityItem: {
-    marginBottom: "8px",
+  activityCard: {
+    display: "grid",
+    gridTemplateColumns: "40px 1fr auto",
+    gap: "12px",
+    alignItems: "center",
+    padding: "14px",
+    borderRadius: "18px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  activityNumber: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(30,215,96,0.12)",
+    color: "#7EF0A5",
+    fontWeight: 800,
+    fontSize: "14px",
+  },
+  activityInput: {
+    width: "100%",
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    color: "#F5F7FA",
+    fontSize: "15px",
+  },
+  removeButton: {
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#A7B0BA",
+    cursor: "pointer",
+    fontSize: "13px",
+    fontWeight: 600,
+  },
+  addButton: {
+    marginTop: "14px",
+    padding: "12px 14px",
+    width: "100%",
+    borderRadius: "16px",
+    border: "1px dashed rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.03)",
+    color: "#C9D1D9",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: 700,
+  },
+  actionRow: {
+    display: "flex",
+    gap: "12px",
+    marginTop: "18px",
   },
   secondaryButton: {
-    padding: "12px 16px",
+    flex: 1,
+    padding: "13px 16px",
     borderRadius: "16px",
     border: "1px solid rgba(255,255,255,0.1)",
     background: "rgba(255,255,255,0.05)",
     color: "#F5F7FA",
     cursor: "pointer",
+    fontWeight: 700,
+  },
+  primaryButtonSmall: {
+    flex: 1,
+    padding: "13px 16px",
+    border: "none",
+    borderRadius: "16px",
+    background: "linear-gradient(135deg, #1ED760, #39E97C)",
+    color: "#08110B",
+    fontSize: "15px",
+    fontWeight: 800,
+    cursor: "pointer",
+    boxShadow: "0 0 30px rgba(30,215,96,0.2)",
   },
 };
