@@ -1,0 +1,11 @@
+{
+  "name": "dateify-backend",
+  "version": "1.0.0",
+  "description": "backend for dateify",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "author": "",
+  "license": "ISC"
+}
