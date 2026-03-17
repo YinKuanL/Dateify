@@ -162,7 +162,7 @@ export default function PlanPage() {
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Duration</label>
                 <select
-                  style={styles.input}
+                  style={styles.select}
                   name="duration"
                   value={formData.duration}
                   onChange={handleChange}
@@ -177,7 +177,7 @@ export default function PlanPage() {
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Budget</label>
                 <select
-                  style={styles.input}
+                  style={styles.select}
                   name="budget"
                   value={formData.budget}
                   onChange={handleChange}
@@ -193,7 +193,7 @@ export default function PlanPage() {
             <div style={styles.inputGroup}>
               <label style={styles.label}>Vibe</label>
               <select
-                style={styles.input}
+                style={styles.select}
                 name="vibe"
                 value={formData.vibe}
                 onChange={handleChange}
@@ -604,4 +604,15 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 0 30px rgba(30,215,96,0.2)",
   },
+  select: {
+  width: "100%",
+  padding: "14px 16px",
+  borderRadius: "18px",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(0,0,0,0.6)", // darker
+  color: "#F5F7FA",
+  fontSize: "15px",
+  outline: "none",
+  colorScheme: "dark", // 🔥 KEY LINE
+},
 };
