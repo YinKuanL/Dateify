@@ -1,209 +1,324 @@
-import React, { useState, useEffect } from 'react';
-import { APIProvider, Map, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  APIProvider,
+  Map,
+  Marker,
+  useMap,
+  useMapsLibrary,
+} from "@vis.gl/react-google-maps";
+import { useLocation, useNavigate } from "react-router-dom";
 
-// 1. Dark Mode Map Styling (Black and Grey)
 const darkMapStyle = [
-  { elementType: "geometry", stylers:[{ color: "#212121" }] },
-  { elementType: "labels.icon", stylers:[{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers:[{ color: "#757575" }] },
-  { elementType: "labels.text.stroke", stylers:[{ color: "#212121" }] },
+  { elementType: "geometry", stylers: [{ color: "#212121" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
-  { featureType: "administrative.country", elementType: "labels.text.fill", stylers:[{ color: "#9e9e9e" }] },
+  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers:[{ color: "#2c2c2c" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
   { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers:[{ color: "#373737" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers:[{ color: "#3c3c3c" }] },
-  { featureType: "transit", stylers:[{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers:[{ color: "#000000" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] }
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373737" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c3c" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] },
 ];
 
-// 2. Component that handles the actual routing logic
-const Directions = ({ origin, destination }) => {
+function Directions({ activities }) {
   const map = useMap();
-  const routesLibrary = useMapsLibrary('routes');
-  const[directionsService, setDirectionsService] = useState(null);
+  const routesLibrary = useMapsLibrary("routes");
+  const [directionsService, setDirectionsService] = useState(null);
   const [directionsRenderer, setDirectionsRenderer] = useState(null);
 
-  // Initialize the Directions Service and Renderer
+  const validActivities = useMemo(
+    () =>
+      (activities || []).filter(
+        (item) =>
+          item &&
+          typeof item.lat === "number" &&
+          typeof item.lng === "number"
+      ),
+    [activities]
+  );
+
   useEffect(() => {
     if (!routesLibrary || !map) return;
-    setDirectionsService(new routesLibrary.DirectionsService());
-    setDirectionsRenderer(new routesLibrary.DirectionsRenderer({ map }));
+
+    const service = new routesLibrary.DirectionsService();
+    const renderer = new routesLibrary.DirectionsRenderer({
+      map,
+      suppressMarkers: true,
+      polylineOptions: {
+        strokeColor: "#1ED760",
+        strokeOpacity: 0.95,
+        strokeWeight: 5,
+      },
+    });
+
+    setDirectionsService(service);
+    setDirectionsRenderer(renderer);
+
+    return () => {
+      renderer.setMap(null);
+    };
   }, [routesLibrary, map]);
 
-  // Request the route when origin or destination changes
   useEffect(() => {
-    if (!directionsService || !directionsRenderer || !origin || !destination) return;
+    if (!directionsService || !directionsRenderer) return;
+    if (validActivities.length < 2) return;
+
+    const origin = {
+      lat: validActivities[0].lat,
+      lng: validActivities[0].lng,
+    };
+
+    const destination = {
+      lat: validActivities[validActivities.length - 1].lat,
+      lng: validActivities[validActivities.length - 1].lng,
+    };
+
+    const waypoints = validActivities.slice(1, -1).map((activity) => ({
+      location: { lat: activity.lat, lng: activity.lng },
+      stopover: true,
+    }));
 
     directionsService
       .route({
         origin,
         destination,
+        waypoints,
+        optimizeWaypoints: false,
         travelMode: window.google.maps.TravelMode.DRIVING,
       })
       .then((response) => {
         directionsRenderer.setDirections(response);
       })
-      .catch((err) => console.error("Directions request failed:", err));
-  },[directionsService, directionsRenderer, origin, destination]);
+      .catch((err) => {
+        console.error("Directions request failed:", err);
+      });
+  }, [directionsService, directionsRenderer, validActivities]);
 
-  return null; // This component doesn't render HTML, it just interacts with the map canvas
-};
+  return null;
+}
 
-// Reusable style object for inputs to keep JSX clean
-const inputStyle = {
-  width: '100%',
-  padding: '8px',
-  backgroundColor: '#2c2c2c',
-  border: '1px solid #444',
-  borderRadius: '4px',
-  color: '#fff',
-  outline: 'none',
-  boxSizing: 'border-box'
-};
-
-// 3. Main Interface Component
 const MapInterface = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const plan = location.state?.plan;
 
-  // Default coordinates (e.g., Central London to Greenwich)
-  const [route, setRoute] = useState({
-    origin: { lat: 51.5072, lng: -0.1276 },
-    destination: { lat: 51.4826, lng: -0.0077 }
-  });
+  const activities = plan?.activities || [];
 
-  // Local state for the input fields
-  const[inputValues, setInputValues] = useState({
-    origLat: 51.5072, origLng: -0.1276,
-    destLat: 51.4826, destLng: -0.0077
-  });
+  const validActivities = activities.filter(
+    (item) =>
+      item &&
+      typeof item.lat === "number" &&
+      typeof item.lng === "number"
+  );
 
-  const handleInputChange = (e) => {
-    setInputValues({ ...inputValues, [e.target.name]: e.target.value });
-  };
-
-  const handleUpdateRoute = (e) => {
-    e.preventDefault();
-    setRoute({
-      origin: { lat: parseFloat(inputValues.origLat), lng: parseFloat(inputValues.origLng) },
-      destination: { lat: parseFloat(inputValues.destLat), lng: parseFloat(inputValues.destLng) }
-    });
-  };
+  const defaultCenter =
+    validActivities.length > 0
+      ? { lat: validActivities[0].lat, lng: validActivities[0].lng }
+      : { lat: 51.5072, lng: -0.1276 };
 
   return (
-    <div style={{ 
-      position: 'fixed', 
-      top: 0, 
-      left: 0, 
-      height: '100vh', 
-      width: '100vw', 
-      backgroundColor: '#212121',
-      overflow: 'hidden', // Prevents scrollbars just for this page
-      zIndex: 9999 // Ensures it sits on top of any global app layouts
-    }}>
+    <div style={styles.page}>
       <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <Map
-          defaultCenter={route.origin}
-          defaultZoom={12}
+          defaultCenter={defaultCenter}
+          defaultZoom={13}
+          gestureHandling="greedy"
           disableDefaultUI={true}
-          styles={darkMapStyle} // Applies the black/grey theme
+          styles={darkMapStyle}
         >
-          {/* Renders the route on the map */}
-          <Directions origin={route.origin} destination={route.destination} />
+          {validActivities.map((activity, index) => (
+            <Marker
+              key={`${activity.name}-${index}`}
+              position={{ lat: activity.lat, lng: activity.lng }}
+              title={`${index + 1}. ${activity.name}`}
+            />
+          ))}
+
+          {validActivities.length >= 2 && (
+            <Directions activities={validActivities} />
+          )}
         </Map>
       </APIProvider>
 
-      {/* Input Card Overlay */}
-      <div 
-        style={{
-          position: 'absolute',
-          top: '20px',
-          left: '20px',
-          backgroundColor: '#1e1e1e',
-          color: '#e0e0e0',
-          padding: '20px',
-          borderRadius: '12px',
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)',
-          width: '320px',
-          zIndex: 10,
-          fontFamily: 'sans-serif',
-          boxSizing: 'border-box'
-        }}
-      >
-        <button 
-          onClick={() => navigate('/')}
-          style={{ 
-            marginBottom: '15px', 
-            background: 'none', 
-            border: 'none', 
-            color: '#3B82F6', 
-            cursor: 'pointer', 
-            padding: 0,
-            fontSize: '14px'
-          }}
-        >
-          &larr; Back to Home
+      <div style={styles.sidebar}>
+        <button onClick={() => navigate("/")} style={styles.backButton}>
+          ← Back to Plan
         </button>
 
-        <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#fff' }}>Route Planner</h2>
-        
-        <form onSubmit={handleUpdateRoute}>
-          <div style={{ marginBottom: '15px' }}>
-            <strong style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>Location 1 (Origin)</strong>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input 
-                type="number" step="any" name="origLat" value={inputValues.origLat} onChange={handleInputChange}
-                placeholder="Lat" required
-                style={inputStyle}
-              />
-              <input 
-                type="number" step="any" name="origLng" value={inputValues.origLng} onChange={handleInputChange}
-                placeholder="Lng" required
-                style={inputStyle}
-              />
-            </div>
-          </div>
+        <div style={styles.headerBlock}>
+          <div style={styles.badge}>Route Map</div>
+          <h2 style={styles.title}>
+            {plan?.title || "Your Date Route"}
+          </h2>
+          <p style={styles.summary}>
+            {plan?.summary ||
+              "Generate a plan first to see your route and activities here."}
+          </p>
+        </div>
 
-          <div style={{ marginBottom: '20px' }}>
-            <strong style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>Location 2 (Destination)</strong>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input 
-                type="number" step="any" name="destLat" value={inputValues.destLat} onChange={handleInputChange}
-                placeholder="Lat" required
-                style={inputStyle}
-              />
-              <input 
-                type="number" step="any" name="destLng" value={inputValues.destLng} onChange={handleInputChange}
-                placeholder="Lng" required
-                style={inputStyle}
-              />
-            </div>
-          </div>
+        <div style={styles.sectionTitle}>Activities</div>
 
-          <button 
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '12px',
-              backgroundColor: '#3B82F6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              transition: 'background 0.2s',
-              boxSizing: 'border-box'
-            }}
-          >
-            Update Route
-          </button>
-        </form>
+        <div style={styles.activityList}>
+          {activities.length > 0 ? (
+            activities.map((activity, index) => (
+              <div key={`${activity.name}-${index}`} style={styles.activityCard}>
+                <div style={styles.activityNumber}>{index + 1}</div>
+
+                <div style={styles.activityContent}>
+                  <div style={styles.activityName}>
+                    {activity.name || "Unnamed activity"}
+                  </div>
+                  <div style={styles.activityAddress}>
+                    {activity.address || "No address available"}
+                  </div>
+                  <div style={styles.coordText}>
+                    {typeof activity.lat === "number" &&
+                    typeof activity.lng === "number"
+                      ? `${activity.lat.toFixed(4)}, ${activity.lng.toFixed(4)}`
+                      : "No coordinates"}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div style={styles.emptyState}>
+              No plan data found. Go back and generate a date plan first.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+};
+
+const styles = {
+  page: {
+    position: "fixed",
+    inset: 0,
+    background: "#0B0D0F",
+    overflow: "hidden",
+  },
+  sidebar: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    width: 360,
+    maxHeight: "calc(100vh - 40px)",
+    overflowY: "auto",
+    zIndex: 10,
+    padding: 22,
+    borderRadius: 24,
+    background: "rgba(15,18,22,0.88)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    backdropFilter: "blur(18px)",
+    WebkitBackdropFilter: "blur(18px)",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+    color: "#F5F7FA",
+    fontFamily: "Inter, sans-serif",
+  },
+  backButton: {
+    marginBottom: 18,
+    background: "transparent",
+    border: "none",
+    color: "#1ED760",
+    cursor: "pointer",
+    padding: 0,
+    fontSize: 14,
+    fontWeight: 700,
+  },
+  headerBlock: {
+    marginBottom: 20,
+  },
+  badge: {
+    display: "inline-block",
+    marginBottom: 12,
+    padding: "7px 12px",
+    borderRadius: 999,
+    background: "rgba(30,215,96,0.10)",
+    border: "1px solid rgba(30,215,96,0.18)",
+    color: "#7EF0A5",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  title: {
+    margin: "0 0 10px 0",
+    fontSize: 24,
+    lineHeight: 1.1,
+    fontWeight: 800,
+    letterSpacing: "-0.03em",
+  },
+  summary: {
+    margin: 0,
+    color: "#A7B0BA",
+    fontSize: 14,
+    lineHeight: 1.6,
+  },
+  sectionTitle: {
+    marginBottom: 12,
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "#A7B0BA",
+  },
+  activityList: {
+    display: "grid",
+    gap: 12,
+  },
+  activityCard: {
+    display: "grid",
+    gridTemplateColumns: "40px 1fr",
+    gap: 12,
+    alignItems: "start",
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  activityNumber: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(30,215,96,0.12)",
+    color: "#7EF0A5",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  activityContent: {
+    display: "grid",
+    gap: 4,
+  },
+  activityName: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#F5F7FA",
+  },
+  activityAddress: {
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "#A7B0BA",
+  },
+  coordText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#6F7A86",
+  },
+  emptyState: {
+    padding: 16,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    color: "#A7B0BA",
+    lineHeight: 1.6,
+  },
 };
 
 export default MapInterface;
