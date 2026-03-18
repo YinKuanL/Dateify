@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function PlanPage() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    locationMode: "specific", // "specific" | "ai-generated"
+    locationMode: "specific",
     location: "",
     locationPrompt: "",
     duration: "",
@@ -16,6 +16,15 @@ export default function PlanPage() {
   const [generatedPlan, setGeneratedPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [warningMessage, setWarningMessage] = useState("");
+
+  const canViewMap = useMemo(() => {
+    return Boolean(
+      generatedPlan?.activities?.some(
+        (activity) => activity.lat !== null && activity.lng !== null
+      )
+    );
+  }, [generatedPlan]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -25,18 +34,51 @@ export default function PlanPage() {
     }));
   }
 
+  function validateForm() {
+    if (
+      formData.locationMode === "specific" &&
+      !formData.location.trim()
+    ) {
+      return "Please enter a location.";
+    }
+
+    if (
+      formData.locationMode === "ai-generated" &&
+      !formData.locationPrompt.trim()
+    ) {
+      return "Please describe the type of location you want AI to generate.";
+    }
+
+    if (!formData.duration) {
+      return "Please select a duration.";
+    }
+
+    if (!formData.budget) {
+      return "Please select a budget.";
+    }
+
+    return "";
+  }
+
   async function handleGeneratePlan() {
+    const validationError = validateForm();
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage("");
+    setWarningMessage("");
 
     try {
       const payload = {
         ...formData,
         location:
-          formData.locationMode === "specific" ? formData.location : "",
+          formData.locationMode === "specific" ? formData.location.trim() : "",
         locationPrompt:
           formData.locationMode === "ai-generated"
-            ? formData.locationPrompt
+            ? formData.locationPrompt.trim()
             : "",
       };
 
@@ -51,14 +93,40 @@ export default function PlanPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        setGeneratedPlan(null);
         setErrorMessage(data.error || "Failed to generate plan.");
-        setIsLoading(false);
         return;
+      }
+
+      if (!Array.isArray(data.activities) || data.activities.length === 0) {
+        setGeneratedPlan(data);
+        setWarningMessage(
+          data.meta?.message ||
+            "AI could not find suitable locations. Try a broader area or edit the prompt."
+        );
+        return;
+      }
+
+      const hasMappedActivities = data.activities.some(
+        (activity) => activity.lat !== null && activity.lng !== null
+      );
+
+      if (!hasMappedActivities) {
+        setWarningMessage(
+          data.meta?.message ||
+            "Plan generated, but none of the locations could be mapped. You can still edit the addresses manually."
+        );
+      } else if (data.meta?.partialLocationFailure) {
+        setWarningMessage(
+          data.meta?.message ||
+            "Plan generated, but some locations could not be mapped."
+        );
       }
 
       setGeneratedPlan(data);
     } catch (error) {
       console.error("Failed to generate plan:", error);
+      setGeneratedPlan(null);
       setErrorMessage("Something went wrong while generating the plan.");
     } finally {
       setIsLoading(false);
@@ -67,23 +135,35 @@ export default function PlanPage() {
 
   function handleActivityChange(index, field, value) {
     setGeneratedPlan((prev) => {
+      if (!prev) return prev;
+
       const updated = [...prev.activities];
       updated[index] = {
         ...updated[index],
         [field]: value,
       };
+
+      if (field === "address") {
+        updated[index].lat = null;
+        updated[index].lng = null;
+      }
+
       return { ...prev, activities: updated };
     });
   }
 
   function handleAddActivity() {
     setGeneratedPlan((prev) => ({
-      ...prev,
+      ...(prev || {
+        title: "Custom Date Plan",
+        summary: "A personalised plan you can edit manually.",
+        activities: [],
+      }),
       activities: [
-        ...prev.activities,
+        ...(prev?.activities || []),
         {
           name: "New custom activity",
-          address: "Enter custom address",
+          address: "",
           lat: null,
           lng: null,
         },
@@ -100,7 +180,26 @@ export default function PlanPage() {
 
   function handleGoToMap() {
     if (!generatedPlan) return;
-    navigate("/map", { state: { plan: generatedPlan } });
+
+    const validActivities = generatedPlan.activities.filter(
+      (activity) => activity.lat !== null && activity.lng !== null
+    );
+
+    if (validActivities.length === 0) {
+      setWarningMessage(
+        "No valid mapped locations found yet. Please edit the activity addresses or regenerate the plan."
+      );
+      return;
+    }
+
+    navigate("/map", {
+      state: {
+        plan: {
+          ...generatedPlan,
+          activities: validActivities,
+        },
+      },
+    });
   }
 
   return (
@@ -268,8 +367,9 @@ export default function PlanPage() {
               {isLoading ? "Generating..." : "Generate AI Plan"}
             </button>
 
-            {errorMessage && (
-              <div style={styles.errorBox}>{errorMessage}</div>
+            {errorMessage && <div style={styles.errorBox}>{errorMessage}</div>}
+            {warningMessage && (
+              <div style={styles.warningBox}>{warningMessage}</div>
             )}
           </div>
 
@@ -279,6 +379,11 @@ export default function PlanPage() {
                 <div>
                   <h3 style={styles.resultTitle}>{generatedPlan.title}</h3>
                   <p style={styles.resultSummary}>{generatedPlan.summary}</p>
+                  {generatedPlan.chosenLocation && (
+                    <p style={styles.chosenLocation}>
+                      Area: {generatedPlan.chosenLocation}
+                    </p>
+                  )}
                 </div>
                 <div style={styles.aiPill}>AI Suggested</div>
               </div>
@@ -307,6 +412,12 @@ export default function PlanPage() {
                           handleActivityChange(index, "address", e.target.value)
                         }
                       />
+
+                      <div style={styles.locationStatus}>
+                        {activity.lat !== null && activity.lng !== null
+                          ? "Mapped"
+                          : "Not mapped yet"}
+                      </div>
                     </div>
 
                     <button
@@ -333,8 +444,13 @@ export default function PlanPage() {
                 </button>
 
                 <button
-                  style={styles.primaryButtonSmall}
+                  style={{
+                    ...styles.primaryButtonSmall,
+                    opacity: canViewMap ? 1 : 0.5,
+                    cursor: canViewMap ? "pointer" : "not-allowed",
+                  }}
                   onClick={handleGoToMap}
+                  disabled={!canViewMap}
                 >
                   View Route Map
                 </button>
@@ -594,6 +710,11 @@ const styles = {
     fontSize: "15px",
     maxWidth: "520px",
   },
+  chosenLocation: {
+    color: "#D8E0E8",
+    fontSize: "13px",
+    marginTop: "10px",
+  },
   aiPill: {
     padding: "8px 12px",
     borderRadius: "999px",
@@ -660,6 +781,10 @@ const styles = {
     fontSize: "13px",
     outline: "none",
   },
+  locationStatus: {
+    fontSize: "12px",
+    color: "#A7B0BA",
+  },
   removeButton: {
     padding: "10px 12px",
     borderRadius: "12px",
@@ -706,7 +831,6 @@ const styles = {
     color: "#08110B",
     fontSize: "15px",
     fontWeight: 800,
-    cursor: "pointer",
     boxShadow: "0 0 30px rgba(30,215,96,0.2)",
   },
   select: {
@@ -726,6 +850,14 @@ const styles = {
     background: "rgba(255, 79, 79, 0.10)",
     border: "1px solid rgba(255, 79, 79, 0.22)",
     color: "#FFB4B4",
+    fontSize: "14px",
+  },
+  warningBox: {
+    padding: "12px 14px",
+    borderRadius: "14px",
+    background: "rgba(255, 193, 7, 0.10)",
+    border: "1px solid rgba(255, 193, 7, 0.22)",
+    color: "#FFD66B",
     fontSize: "14px",
   },
 };
