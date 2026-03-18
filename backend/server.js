@@ -10,6 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 const API_KEY = process.env.FEATHERLESS_API_KEY;
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const MODEL = "Qwen/Qwen2.5-7B-Instruct";
 
 function safeJsonParse(text) {
@@ -116,6 +117,7 @@ async function geocodeWithFallback(address, fallbackArea = "") {
   return firstTry;
 }
 
+<<<<<<< HEAD
 async function callAI(prompt, systemMessage = "You are a helpful assistant. Return strict valid JSON only.") {
   const aiRes = await fetch("https://api.featherless.ai/v1/chat/completions", {
     method: "POST",
@@ -149,6 +151,132 @@ async function callAI(prompt, systemMessage = "You are a helpful assistant. Retu
 }
 
 function buildPlanPrompt({
+=======
+// --- Romantic Scoring Integration ---
+
+async function fetchPlaceData(name, locationHint) {
+  if (!GOOGLE_MAPS_API_KEY) return null;
+
+  try {
+    const searchUrl = "https://places.googleapis.com/v1/places:searchText";
+    const res = await fetch(searchUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
+        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.id,places.rating,places.userRatingCount,places.priceLevel,places.types,places.editorialSummary,places.reviews",
+      },
+      body: JSON.stringify({
+        textQuery: `${name}${locationHint ? ` in ${locationHint}` : ""}`,
+        maxResultCount: 1,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Google Places API error:", await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    return data.places?.[0] || null;
+  } catch (err) {
+    console.error("Error fetching place data:", err);
+    return null;
+  }
+}
+
+async function callLLM(prompt) {
+  if (!API_KEY) return null;
+
+  try {
+    const res = await fetch("https://api.featherless.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.7,
+        messages: [
+          {
+            role: "system",
+            content: "You are a romantic atmosphere expert. Rate places for dates.",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+        console.error("Featherless AI API error:", await res.text());
+        return null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    console.error("Error calling LLM:", err);
+    return null;
+  }
+}
+
+async function enrichWithRomanticScore(activity, fallbackArea = "") {
+  // 1. Fetch place data from Google
+  const placeData = await fetchPlaceData(activity.name, fallbackArea);
+  
+  const summary = placeData?.editorialSummary?.text || "";
+  const reviews = placeData?.reviews?.map(r => r.text?.text).join(" ").slice(0, 1000) || "";
+  const types = placeData?.types?.join(", ") || "";
+  const rating = placeData?.rating || 4.0;
+  const name = placeData?.displayName?.text || activity.name;
+
+  // Option A – Rule-based fallback
+  let score = rating * 1.5; // base 4–5 → 6–7.5
+  if (/cozy|romantic|intimate|candle|view|river|sunset|garden|botanic|fine dining|elegant/i.test(summary + name + types + reviews)) {
+    score += 2.5;
+  }
+  if (placeData?.photos?.length > 3) score += 1;
+  score = Math.min(10, Math.max(3, Math.round(score * 10) / 10));
+  
+  let reason = summary.includes("romantic") 
+    ? "Frequently described as romantic with cozy atmosphere" 
+    : "Pleasant setting suitable for dates";
+
+  // Option B – LLM boost (Featherless)
+  const llmResponse = await callLLM(`
+    Rate how romantic this place is for a date on a scale of 1-10.
+    Name: ${name}
+    Types: ${types}
+    Summary: ${summary}
+    Recent Reviews Snippets: ${reviews.slice(0, 500)}
+    
+    Give ONLY: number | one short sentence of explanation.
+    Example: 8.5 | Beautiful river views and intimate candlelit tables.
+  `);
+
+  if (llmResponse && llmResponse.includes("|")) {
+    const [llmScore, llmReason] = llmResponse.split("|").map(s => s.trim());
+    const parsedScore = parseFloat(llmScore);
+    if (!isNaN(parsedScore)) {
+        score = parsedScore;
+        reason = llmReason;
+    }
+  }
+
+  return {
+    ...activity,
+    romanticScore: score,
+    romanticReason: reason,
+    // Preserve or update details from Google if useful
+    address: placeData?.formattedAddress || activity.address,
+    lat: placeData?.location?.latitude || activity.lat,
+    lng: placeData?.location?.longitude || activity.lng,
+  };
+}
+
+function buildPrompt({
+>>>>>>> ed53c8b (Added romance scores)
   locationMode,
   location,
   locationPrompt,
@@ -310,6 +438,7 @@ app.post("/api/plan-date", async (req, res) => {
     const resolvedActivities = await Promise.all(
       activities.map(async (activity) => {
         try {
+<<<<<<< HEAD
           if (looksTooVague(activity.address)) {
             return {
               ...activity,
@@ -332,11 +461,35 @@ app.post("/api/plan-date", async (req, res) => {
                 : null,
           };
         } catch {
+=======
+          // 1. Enrich with romantic score (this also tries to get coordinates from Google Places)
+          const enriched = await enrichWithRomanticScore(activity, fallbackArea);
+
+          // 2. If Google couldn't find it/geocode it, fallback to Nominatim
+          if (enriched.lat === null || enriched.lat === undefined) {
+             const coords = await geocodeWithFallback(
+                activity.address,
+                fallbackArea
+              );
+              enriched.lat = coords.lat;
+              enriched.lng = coords.lng;
+              enriched.address = coords.resolvedAddress || enriched.address || activity.address;
+          }
+
+          return enriched;
+        } catch (error) {
+          console.error("Enrichment error:", error);
+>>>>>>> ed53c8b (Added romance scores)
           return {
             ...activity,
             lat: null,
             lng: null,
+<<<<<<< HEAD
             mappingError: "Geocoding failed",
+=======
+            romanticScore: 5.0,
+            romanticReason: "A pleasant spot for a date.",
+>>>>>>> ed53c8b (Added romance scores)
           };
         }
       })

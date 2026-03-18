@@ -627,6 +627,19 @@ export default function PlanPage() {
                       <div style={styles.locationStatus}>
                         {getLocationStatus(activity)}
                       </div>
+
+                      {activity.romanticScore && (
+                        <div style={styles.romanticHighlight}>
+                          <div style={styles.romanticHeader}>
+                            <span style={styles.romanticScore}>
+                              ❤️ {activity.romanticScore}/10 Romantic Score
+                            </span>
+                          </div>
+                          <div style={styles.romanticReason}>
+                            "{activity.romanticReason}"
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div style={styles.activityActions}>
@@ -1060,38 +1073,69 @@ const styles = {
     padding: "12px 14px",
     width: "100%",
     borderRadius: "16px",
-    border: "1px dashed rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.03)",
-    color: "#C9D1D9",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px dashed rgba(255,255,255,0.2)",
+    color: "#F5F7FA",
     cursor: "pointer",
     fontSize: "14px",
-    fontWeight: 700,
+    fontWeight: 600,
+    width: "100%",
   },
   actionRow: {
+    marginTop: "24px",
     display: "flex",
     gap: "12px",
-    marginTop: "18px",
   },
   secondaryButton: {
     flex: 1,
-    padding: "13px 16px",
+    padding: "14px",
     borderRadius: "16px",
-    border: "1px solid rgba(255,255,255,0.1)",
     background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
     color: "#F5F7FA",
-    cursor: "pointer",
+    fontSize: "15px",
     fontWeight: 700,
+    cursor: "pointer",
   },
   primaryButtonSmall: {
-    flex: 1,
-    padding: "13px 16px",
-    border: "none",
+    flex: 1.2,
+    padding: "14px",
     borderRadius: "16px",
     background: "linear-gradient(135deg, #1ED760, #39E97C)",
+    border: "none",
     color: "#08110B",
     fontSize: "15px",
     fontWeight: 800,
-    boxShadow: "0 0 30px rgba(30,215,96,0.2)",
+    cursor: "pointer",
+    boxShadow: "0 0 24px rgba(30,215,96,0.2)",
+  },
+  romanticHighlight: {
+    marginTop: "10px",
+    padding: "12px 14px",
+    borderRadius: "14px",
+    background:
+      "linear-gradient(135deg, rgba(255, 79, 163, 0.08), rgba(255, 79, 163, 0.03))",
+    border: "1px solid rgba(255, 79, 163, 0.2)",
+  },
+  romanticHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "4px",
+  },
+  romanticScore: {
+    fontSize: "13px",
+    fontWeight: 800,
+    color: "#FF4FA3",
+    letterSpacing: "0.02em",
+  },
+  romanticReason: {
+    fontSize: "13px",
+    lineHeight: 1.5,
+    color: "#D8E0E8",
+    fontStyle: "italic",
+    opacity: 0.9,
   },
   select: {
     width: "100%",

@@ -182,7 +182,18 @@ const MapInterface = () => {
                       ? `${activity.lat.toFixed(4)}, ${activity.lng.toFixed(4)}`
                       : "No coordinates"}
                   </div>
-                </div>
+
+                    {activity.romanticScore && (
+                      <div style={styles.romanticHighlight}>
+                        <div style={styles.romanticText}>
+                          ❤️ {activity.romanticScore}/10
+                        </div>
+                        <div style={styles.romanticReason}>
+                          "{activity.romanticReason}"
+                        </div>
+                      </div>
+                    )}
+                  </div>
               </div>
             ))
           ) : (
@@ -310,6 +321,28 @@ const styles = {
     marginTop: 4,
     fontSize: 12,
     color: "#6F7A86",
+  },
+  romanticHighlight: {
+    marginTop: "8px",
+    padding: "8px 10px",
+    borderRadius: "12px",
+    background: "rgba(255, 79, 163, 0.05)",
+    border: "1px solid rgba(255, 79, 163, 0.12)",
+  },
+  romanticText: {
+    fontSize: "12px",
+    color: "#FF4FA3",
+    fontWeight: 700,
+    marginBottom: "2px",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  },
+  romanticReason: {
+    fontSize: "11px",
+    lineHeight: 1.4,
+    color: "#A7B0BA",
+    fontStyle: "italic",
   },
   emptyState: {
     padding: 16,
