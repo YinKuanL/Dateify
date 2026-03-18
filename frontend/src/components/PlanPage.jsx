@@ -15,30 +15,33 @@ export default function PlanPage() {
 
   const [generatedPlan, setGeneratedPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [mappingIndex, setMappingIndex] = useState(null);
+  const [isMappingAll, setIsMappingAll] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [warningMessage, setWarningMessage] = useState("");
 
-  const canViewMap = useMemo(() => {
-    return Boolean(
-      generatedPlan?.activities?.some(
-        (activity) => activity.lat !== null && activity.lng !== null
-      )
+  const allActivitiesMapped = useMemo(() => {
+    if (!generatedPlan?.activities?.length) return false;
+
+    return generatedPlan.activities.every(
+      (activity) => activity.lat !== null && activity.lng !== null
     );
   }, [generatedPlan]);
 
   function handleChange(e) {
     const { name, value } = e.target;
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+
+    if (errorMessage) setErrorMessage("");
+    if (warningMessage) setWarningMessage("");
   }
 
   function validateForm() {
-    if (
-      formData.locationMode === "specific" &&
-      !formData.location.trim()
-    ) {
+    if (formData.locationMode === "specific" && !formData.location.trim()) {
       return "Please enter a location.";
     }
 
@@ -62,8 +65,10 @@ export default function PlanPage() {
 
   async function handleGeneratePlan() {
     const validationError = validateForm();
+
     if (validationError) {
       setErrorMessage(validationError);
+      setWarningMessage("");
       return;
     }
 
@@ -102,28 +107,39 @@ export default function PlanPage() {
         setGeneratedPlan(data);
         setWarningMessage(
           data.meta?.message ||
-            "AI could not find suitable locations. Try a broader area or edit the prompt."
+            (formData.locationMode === "specific"
+              ? `AI could not find usable addresses in "${formData.location}". Try a broader nearby area.`
+              : "AI could not find suitable locations. Try a broader area or edit the prompt.")
         );
         return;
       }
 
-      const hasMappedActivities = data.activities.some(
-        (activity) => activity.lat !== null && activity.lng !== null
-      );
+      const normalisedActivities = data.activities.map((activity) => ({
+        ...activity,
+        isCustom: false,
+        mappingError: activity.mappingError || null,
+      }));
 
-      if (!hasMappedActivities) {
+      const mappedCount = normalisedActivities.filter(
+        (activity) => activity.lat !== null && activity.lng !== null
+      ).length;
+
+      if (mappedCount === 0) {
         setWarningMessage(
           data.meta?.message ||
-            "Plan generated, but none of the locations could be mapped. You can still edit the addresses manually."
+            "Plan generated, but none of the locations could be mapped."
         );
-      } else if (data.meta?.partialLocationFailure) {
+      } else if (mappedCount < normalisedActivities.length) {
         setWarningMessage(
           data.meta?.message ||
-            "Plan generated, but some locations could not be mapped."
+            "Plan generated, but some locations still need mapping."
         );
       }
 
-      setGeneratedPlan(data);
+      setGeneratedPlan({
+        ...data,
+        activities: normalisedActivities,
+      });
     } catch (error) {
       console.error("Failed to generate plan:", error);
       setGeneratedPlan(null);
@@ -137,19 +153,173 @@ export default function PlanPage() {
     setGeneratedPlan((prev) => {
       if (!prev) return prev;
 
-      const updated = [...prev.activities];
-      updated[index] = {
-        ...updated[index],
+      const updatedActivities = [...prev.activities];
+      const updatedActivity = {
+        ...updatedActivities[index],
         [field]: value,
+        lat: null,
+        lng: null,
+        mappingError: null,
       };
 
-      if (field === "address") {
-        updated[index].lat = null;
-        updated[index].lng = null;
+      updatedActivities[index] = updatedActivity;
+
+      return {
+        ...prev,
+        activities: updatedActivities,
+      };
+    });
+  }
+
+  function getLocationContext() {
+    return (
+      generatedPlan?.chosenLocation ||
+      (formData.locationMode === "specific"
+        ? formData.location.trim()
+        : formData.locationPrompt.trim())
+    );
+  }
+
+  async function mapSingleActivity(activity) {
+    const activityName = activity.name?.trim() || "";
+    const activityAddress = activity.address?.trim() || "";
+
+    if (!activityName && !activityAddress) {
+      return {
+        ...activity,
+        lat: null,
+        lng: null,
+        mappingError: "Please enter an activity name or address first.",
+      };
+    }
+
+    const response = await fetch("http://localhost:5555/api/map-activity", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        activityName,
+        activityAddress,
+        chosenLocation: getLocationContext(),
+        locationMode: formData.locationMode,
+        vibe: formData.vibe,
+        budget: formData.budget,
+        regenerateAddress: true,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        ...activity,
+        lat: null,
+        lng: null,
+        mappingError: data.error || "Failed to map activity.",
+      };
+    }
+
+    return {
+      ...activity,
+      name: data.name || activity.name,
+      address: data.address || activity.address,
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
+      mappingError: data.mappingError || null,
+    };
+  }
+
+  async function handleMapActivity(index) {
+    if (!generatedPlan?.activities?.[index]) return;
+
+    setMappingIndex(index);
+    setErrorMessage("");
+    setWarningMessage("");
+
+    try {
+      const updatedActivity = await mapSingleActivity(
+        generatedPlan.activities[index]
+      );
+
+      setGeneratedPlan((prev) => {
+        if (!prev) return prev;
+
+        const updatedActivities = [...prev.activities];
+        updatedActivities[index] = updatedActivity;
+
+        return {
+          ...prev,
+          activities: updatedActivities,
+        };
+      });
+
+      if (updatedActivity.mappingError) {
+        setWarningMessage(updatedActivity.mappingError);
+      }
+    } catch (error) {
+      console.error("Failed to map activity:", error);
+
+      setGeneratedPlan((prev) => {
+        if (!prev) return prev;
+
+        const updatedActivities = [...prev.activities];
+        updatedActivities[index] = {
+          ...updatedActivities[index],
+          lat: null,
+          lng: null,
+          mappingError: "Something went wrong while mapping this activity.",
+        };
+
+        return {
+          ...prev,
+          activities: updatedActivities,
+        };
+      });
+    } finally {
+      setMappingIndex(null);
+    }
+  }
+
+  async function handleMapAllActivities() {
+    if (!generatedPlan?.activities?.length) return;
+
+    setIsMappingAll(true);
+    setErrorMessage("");
+    setWarningMessage("");
+
+    try {
+      const mappedActivities = [];
+
+      for (const activity of generatedPlan.activities) {
+        const mapped = await mapSingleActivity(activity);
+        mappedActivities.push(mapped);
       }
 
-      return { ...prev, activities: updated };
-    });
+      setGeneratedPlan((prev) => {
+        if (!prev) return prev;
+
+        return {
+          ...prev,
+          activities: mappedActivities,
+        };
+      });
+
+      const failedCount = mappedActivities.filter(
+        (activity) => activity.lat === null || activity.lng === null
+      ).length;
+
+      if (failedCount > 0) {
+        setWarningMessage(
+          `${failedCount} activit${failedCount === 1 ? "y" : "ies"} could not be mapped yet.`
+        );
+      }
+    } catch (error) {
+      console.error("Failed to map all activities:", error);
+      setWarningMessage("Something went wrong while mapping all activities.");
+    } finally {
+      setIsMappingAll(false);
+    }
   }
 
   function handleAddActivity() {
@@ -157,49 +327,64 @@ export default function PlanPage() {
       ...(prev || {
         title: "Custom Date Plan",
         summary: "A personalised plan you can edit manually.",
+        chosenLocation:
+          formData.locationMode === "specific"
+            ? formData.location
+            : "Custom plan",
         activities: [],
       }),
       activities: [
         ...(prev?.activities || []),
         {
-          name: "New custom activity",
+          name: "",
           address: "",
           lat: null,
           lng: null,
+          mappingError: null,
+          isCustom: true,
         },
       ],
     }));
   }
 
   function handleRemoveActivity(index) {
-    setGeneratedPlan((prev) => ({
-      ...prev,
-      activities: prev.activities.filter((_, i) => i !== index),
-    }));
+    setGeneratedPlan((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        activities: prev.activities.filter((_, i) => i !== index),
+      };
+    });
   }
 
   function handleGoToMap() {
     if (!generatedPlan) return;
 
-    const validActivities = generatedPlan.activities.filter(
-      (activity) => activity.lat !== null && activity.lng !== null
-    );
-
-    if (validActivities.length === 0) {
+    if (!allActivitiesMapped) {
       setWarningMessage(
-        "No valid mapped locations found yet. Please edit the activity addresses or regenerate the plan."
+        "Please map all activities first before viewing the full route."
       );
       return;
     }
 
     navigate("/map", {
       state: {
-        plan: {
-          ...generatedPlan,
-          activities: validActivities,
-        },
+        plan: generatedPlan,
       },
     });
+  }
+
+  function getLocationStatus(activity) {
+    if (activity.lat !== null && activity.lng !== null) {
+      return "Mapped";
+    }
+
+    if (activity.mappingError) {
+      return `Not mapped: ${activity.mappingError}`;
+    }
+
+    return "Not mapped yet";
   }
 
   return (
@@ -235,8 +420,8 @@ export default function PlanPage() {
 
           <p style={styles.subtitle}>
             Our AI suggests the ideal activities based on your vibe, budget,
-            duration, and location. Then you can customise every step before
-            viewing the route.
+            duration, and location. You can also edit an activity or address,
+            then remap it with AI into a real place.
           </p>
 
           <div style={styles.featureRow}>
@@ -248,9 +433,10 @@ export default function PlanPage() {
             </div>
 
             <div style={styles.featureCard}>
-              <div style={styles.featureTitle}>Customisable Plan</div>
+              <div style={styles.featureTitle}>Regenerate and Map</div>
               <div style={styles.featureText}>
-                Edit, remove, or add your own activities easily.
+                Edit the activity name or address, then let AI regenerate the
+                best real-world place for it.
               </div>
             </div>
           </div>
@@ -291,6 +477,9 @@ export default function PlanPage() {
                   value={formData.location}
                   onChange={handleChange}
                 />
+                <div style={styles.helperText}>
+                  AI will try to keep all activities inside this area.
+                </div>
               </div>
             ) : (
               <div style={styles.inputGroup}>
@@ -360,7 +549,11 @@ export default function PlanPage() {
             </div>
 
             <button
-              style={styles.primaryButton}
+              style={{
+                ...styles.primaryButton,
+                opacity: isLoading ? 0.8 : 1,
+                cursor: isLoading ? "wait" : "pointer",
+              }}
               onClick={handleGeneratePlan}
               disabled={isLoading}
             >
@@ -379,16 +572,33 @@ export default function PlanPage() {
                 <div>
                   <h3 style={styles.resultTitle}>{generatedPlan.title}</h3>
                   <p style={styles.resultSummary}>{generatedPlan.summary}</p>
+
                   {generatedPlan.chosenLocation && (
                     <p style={styles.chosenLocation}>
                       Area: {generatedPlan.chosenLocation}
                     </p>
                   )}
                 </div>
-                <div style={styles.aiPill}>AI Suggested</div>
+
+                <div style={styles.aiPill}>
+                  {allActivitiesMapped ? "All Mapped" : "Needs Mapping"}
+                </div>
               </div>
 
-              <div style={styles.sectionLabel}>Activities</div>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionLabel}>Activities</div>
+                <button
+                  style={{
+                    ...styles.mapAllButton,
+                    opacity: isMappingAll ? 0.7 : 1,
+                    cursor: isMappingAll ? "wait" : "pointer",
+                  }}
+                  onClick={handleMapAllActivities}
+                  disabled={isMappingAll}
+                >
+                  {isMappingAll ? "Mapping All..." : "Map All with AI"}
+                </button>
+              </div>
 
               <div style={styles.activityList}>
                 {generatedPlan.activities.map((activity, index) => (
@@ -399,6 +609,7 @@ export default function PlanPage() {
                       <input
                         style={styles.activityInput}
                         value={activity.name}
+                        placeholder="e.g. restaurant, dessert cafe, museum"
                         onChange={(e) =>
                           handleActivityChange(index, "name", e.target.value)
                         }
@@ -407,30 +618,43 @@ export default function PlanPage() {
                       <input
                         style={styles.activityAddressInput}
                         value={activity.address || ""}
-                        placeholder="Enter activity address"
+                        placeholder="Enter a hint or current address"
                         onChange={(e) =>
                           handleActivityChange(index, "address", e.target.value)
                         }
                       />
 
                       <div style={styles.locationStatus}>
-                        {activity.lat !== null && activity.lng !== null
-                          ? "Mapped"
-                          : "Not mapped yet"}
+                        {getLocationStatus(activity)}
                       </div>
                     </div>
 
-                    <button
-                      style={styles.removeButton}
-                      onClick={() => handleRemoveActivity(index)}
-                    >
-                      Remove
-                    </button>
+                    <div style={styles.activityActions}>
+                      <button
+                        style={styles.mapButton}
+                        onClick={() => handleMapActivity(index)}
+                        disabled={mappingIndex === index || isMappingAll}
+                      >
+                        {mappingIndex === index ? "Mapping..." : "Map with AI"}
+                      </button>
+
+                      <button
+                        style={styles.removeButton}
+                        onClick={() => handleRemoveActivity(index)}
+                        disabled={isMappingAll}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <button style={styles.addButton} onClick={handleAddActivity}>
+              <button
+                style={styles.addButton}
+                onClick={handleAddActivity}
+                disabled={isMappingAll}
+              >
                 + Add Custom Activity
               </button>
 
@@ -438,7 +662,7 @@ export default function PlanPage() {
                 <button
                   style={styles.secondaryButton}
                   onClick={handleGeneratePlan}
-                  disabled={isLoading}
+                  disabled={isLoading || isMappingAll}
                 >
                   Regenerate
                 </button>
@@ -446,11 +670,11 @@ export default function PlanPage() {
                 <button
                   style={{
                     ...styles.primaryButtonSmall,
-                    opacity: canViewMap ? 1 : 0.5,
-                    cursor: canViewMap ? "pointer" : "not-allowed",
+                    opacity: allActivitiesMapped ? 1 : 0.5,
+                    cursor: allActivitiesMapped ? "pointer" : "not-allowed",
                   }}
                   onClick={handleGoToMap}
-                  disabled={!canViewMap}
+                  disabled={!allActivitiesMapped}
                 >
                   View Route Map
                 </button>
@@ -649,6 +873,11 @@ const styles = {
     color: "#A7B0BA",
     fontWeight: 600,
   },
+  helperText: {
+    fontSize: "12px",
+    color: "#8F98A3",
+    lineHeight: 1.5,
+  },
   input: {
     width: "100%",
     padding: "14px 16px",
@@ -680,7 +909,6 @@ const styles = {
     color: "#08110B",
     fontSize: "16px",
     fontWeight: 800,
-    cursor: "pointer",
     boxShadow: "0 0 30px rgba(30,215,96,0.25)",
     marginTop: "8px",
   },
@@ -725,13 +953,29 @@ const styles = {
     border: "1px solid rgba(30,215,96,0.2)",
     whiteSpace: "nowrap",
   },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "12px",
+  },
   sectionLabel: {
     fontSize: "13px",
     color: "#A7B0BA",
     fontWeight: 700,
-    marginBottom: "12px",
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+  },
+  mapAllButton: {
+    padding: "10px 14px",
+    borderRadius: "12px",
+    border: "1px solid rgba(30,215,96,0.25)",
+    background: "rgba(30,215,96,0.10)",
+    color: "#7EF0A5",
+    cursor: "pointer",
+    fontSize: "13px",
+    fontWeight: 700,
   },
   activityList: {
     display: "grid",
@@ -784,6 +1028,22 @@ const styles = {
   locationStatus: {
     fontSize: "12px",
     color: "#A7B0BA",
+    lineHeight: 1.5,
+  },
+  activityActions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  mapButton: {
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(30,215,96,0.25)",
+    background: "rgba(30,215,96,0.10)",
+    color: "#7EF0A5",
+    cursor: "pointer",
+    fontSize: "13px",
+    fontWeight: 700,
   },
   removeButton: {
     padding: "10px 12px",
