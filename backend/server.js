@@ -117,41 +117,6 @@ async function geocodeWithFallback(address, fallbackArea = "") {
   return firstTry;
 }
 
-<<<<<<< HEAD
-async function callAI(prompt, systemMessage = "You are a helpful assistant. Return strict valid JSON only.") {
-  const aiRes = await fetch("https://api.featherless.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: 0.7,
-      messages: [
-        {
-          role: "system",
-          content: systemMessage,
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    }),
-  });
-
-  if (!aiRes.ok) {
-    const errorText = await aiRes.text();
-    throw new Error(`AI API error: ${errorText}`);
-  }
-
-  const aiData = await aiRes.json();
-  return aiData.choices?.[0]?.message?.content || "";
-}
-
-function buildPlanPrompt({
-=======
 // --- Romantic Scoring Integration ---
 
 async function fetchPlaceData(name, locationHint) {
@@ -209,8 +174,8 @@ async function callLLM(prompt) {
     });
 
     if (!res.ok) {
-        console.error("Featherless AI API error:", await res.text());
-        return null;
+      console.error("Featherless AI API error:", await res.text());
+      return null;
     }
 
     const data = await res.json();
@@ -224,7 +189,7 @@ async function callLLM(prompt) {
 async function enrichWithRomanticScore(activity, fallbackArea = "") {
   // 1. Fetch place data from Google
   const placeData = await fetchPlaceData(activity.name, fallbackArea);
-  
+
   const summary = placeData?.editorialSummary?.text || "";
   const reviews = placeData?.reviews?.map(r => r.text?.text).join(" ").slice(0, 1000) || "";
   const types = placeData?.types?.join(", ") || "";
@@ -238,9 +203,9 @@ async function enrichWithRomanticScore(activity, fallbackArea = "") {
   }
   if (placeData?.photos?.length > 3) score += 1;
   score = Math.min(10, Math.max(3, Math.round(score * 10) / 10));
-  
-  let reason = summary.includes("romantic") 
-    ? "Frequently described as romantic with cozy atmosphere" 
+
+  let reason = summary.includes("romantic")
+    ? "Frequently described as romantic with cozy atmosphere"
     : "Pleasant setting suitable for dates";
 
   // Option B – LLM boost (Featherless)
@@ -259,8 +224,8 @@ async function enrichWithRomanticScore(activity, fallbackArea = "") {
     const [llmScore, llmReason] = llmResponse.split("|").map(s => s.trim());
     const parsedScore = parseFloat(llmScore);
     if (!isNaN(parsedScore)) {
-        score = parsedScore;
-        reason = llmReason;
+      score = parsedScore;
+      reason = llmReason;
     }
   }
 
@@ -275,8 +240,39 @@ async function enrichWithRomanticScore(activity, fallbackArea = "") {
   };
 }
 
-function buildPrompt({
->>>>>>> ed53c8b (Added romance scores)
+async function callAI(prompt, systemMessage = "You are a helpful assistant. Return strict valid JSON only.") {
+  const aiRes = await fetch("https://api.featherless.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: 0.7,
+      messages: [
+        {
+          role: "system",
+          content: systemMessage,
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    }),
+  });
+
+  if (!aiRes.ok) {
+    const errorText = await aiRes.text();
+    throw new Error(`AI API error: ${errorText}`);
+  }
+
+  const aiData = await aiRes.json();
+  return aiData.choices?.[0]?.message?.content || "";
+}
+
+function buildPlanPrompt({
   locationMode,
   location,
   locationPrompt,
@@ -438,7 +434,6 @@ app.post("/api/plan-date", async (req, res) => {
     const resolvedActivities = await Promise.all(
       activities.map(async (activity) => {
         try {
-<<<<<<< HEAD
           if (looksTooVague(activity.address)) {
             return {
               ...activity,
@@ -461,35 +456,11 @@ app.post("/api/plan-date", async (req, res) => {
                 : null,
           };
         } catch {
-=======
-          // 1. Enrich with romantic score (this also tries to get coordinates from Google Places)
-          const enriched = await enrichWithRomanticScore(activity, fallbackArea);
-
-          // 2. If Google couldn't find it/geocode it, fallback to Nominatim
-          if (enriched.lat === null || enriched.lat === undefined) {
-             const coords = await geocodeWithFallback(
-                activity.address,
-                fallbackArea
-              );
-              enriched.lat = coords.lat;
-              enriched.lng = coords.lng;
-              enriched.address = coords.resolvedAddress || enriched.address || activity.address;
-          }
-
-          return enriched;
-        } catch (error) {
-          console.error("Enrichment error:", error);
->>>>>>> ed53c8b (Added romance scores)
           return {
             ...activity,
             lat: null,
             lng: null,
-<<<<<<< HEAD
             mappingError: "Geocoding failed",
-=======
-            romanticScore: 5.0,
-            romanticReason: "A pleasant spot for a date.",
->>>>>>> ed53c8b (Added romance scores)
           };
         }
       })
