@@ -5,7 +5,9 @@ export default function PlanPage() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
+    locationMode: "specific", // "specific" | "ai-generated"
     location: "",
+    locationPrompt: "",
     duration: "",
     budget: "",
     vibe: "Romantic",
@@ -28,12 +30,22 @@ export default function PlanPage() {
     setErrorMessage("");
 
     try {
+      const payload = {
+        ...formData,
+        location:
+          formData.locationMode === "specific" ? formData.location : "",
+        locationPrompt:
+          formData.locationMode === "ai-generated"
+            ? formData.locationPrompt
+            : "",
+      };
+
       const response = await fetch("http://localhost:5000/api/plan-date", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -71,7 +83,7 @@ export default function PlanPage() {
         ...prev.activities,
         {
           name: "New custom activity",
-          address: "Custom address",
+          address: "Enter custom address",
           lat: null,
           lng: null,
         },
@@ -157,16 +169,42 @@ export default function PlanPage() {
 
           <div style={styles.form}>
             <div style={styles.inputGroup}>
-              <label style={styles.label}>Location</label>
-              <input
-                style={styles.input}
-                type="text"
-                name="location"
-                placeholder="Enter city or area"
-                value={formData.location}
+              <label style={styles.label}>Location Type</label>
+              <select
+                style={styles.select}
+                name="locationMode"
+                value={formData.locationMode}
                 onChange={handleChange}
-              />
+              >
+                <option value="specific">Choose a specific location</option>
+                <option value="ai-generated">Let AI suggest the location</option>
+              </select>
             </div>
+
+            {formData.locationMode === "specific" ? (
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Location</label>
+                <input
+                  style={styles.input}
+                  type="text"
+                  name="location"
+                  placeholder="Enter city, area, or neighbourhood"
+                  value={formData.location}
+                  onChange={handleChange}
+                />
+              </div>
+            ) : (
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>AI Location Prompt</label>
+                <textarea
+                  style={styles.textarea}
+                  name="locationPrompt"
+                  placeholder="Example: Somewhere quiet by the river in London, good for a romantic evening walk and dinner"
+                  value={formData.locationPrompt}
+                  onChange={handleChange}
+                />
+              </div>
+            )}
 
             <div style={styles.twoCol}>
               <div style={styles.inputGroup}>
@@ -178,9 +216,16 @@ export default function PlanPage() {
                   onChange={handleChange}
                 >
                   <option value="">Select duration</option>
+                  <option value="1 hour">1 hour</option>
                   <option value="2 hours">2 hours</option>
+                  <option value="3 hours">3 hours</option>
                   <option value="4 hours">4 hours</option>
+                  <option value="5 hours">5 hours</option>
+                  <option value="6 hours">6 hours</option>
+                  <option value="Half day">Half day</option>
                   <option value="All evening">All evening</option>
+                  <option value="Full day">Full day</option>
+                  <option value="Weekend">Weekend</option>
                 </select>
               </div>
 
@@ -253,9 +298,15 @@ export default function PlanPage() {
                           handleActivityChange(index, "name", e.target.value)
                         }
                       />
-                      <div style={styles.activityAddress}>
-                        {activity.address}
-                      </div>
+
+                      <input
+                        style={styles.activityAddressInput}
+                        value={activity.address || ""}
+                        placeholder="Enter activity address"
+                        onChange={(e) =>
+                          handleActivityChange(index, "address", e.target.value)
+                        }
+                      />
                     </div>
 
                     <button
@@ -492,6 +543,19 @@ const styles = {
     fontSize: "15px",
     outline: "none",
   },
+  textarea: {
+    width: "100%",
+    minHeight: "96px",
+    padding: "14px 16px",
+    borderRadius: "18px",
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#F5F7FA",
+    fontSize: "15px",
+    outline: "none",
+    resize: "vertical",
+    fontFamily: "Inter, sans-serif",
+  },
   primaryButton: {
     padding: "15px 18px",
     border: "none",
@@ -576,7 +640,7 @@ const styles = {
   },
   activityContent: {
     display: "grid",
-    gap: "4px",
+    gap: "8px",
   },
   activityInput: {
     width: "100%",
@@ -586,10 +650,15 @@ const styles = {
     color: "#F5F7FA",
     fontSize: "15px",
   },
-  activityAddress: {
-    fontSize: "12px",
+  activityAddressInput: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.03)",
     color: "#A7B0BA",
-    lineHeight: 1.4,
+    fontSize: "13px",
+    outline: "none",
   },
   removeButton: {
     padding: "10px 12px",
