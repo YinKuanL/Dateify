@@ -82,7 +82,7 @@ export default function PlanPage() {
             : "",
       };
 
-      const response = await fetch("http://localhost:5000/api/plan-date", {
+      const response = await fetch("http://localhost:5555/api/plan-date", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
